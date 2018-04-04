@@ -47,6 +47,7 @@ const char * const VSYNC_STRS[NUM_VSYNC + 1] = {
 const char * const BLUR_METHOD_STRS[NUM_BLRMTHD + 1] = {
     "convolution",    // BLRMTHD_CONV
     "kawase",         // BLRMTHD_KAWASE
+    "dual_kawase",    // BLRMTHD_DUALKAWASE
     NULL
 };
 
@@ -4708,11 +4709,11 @@ usage(int ret) {
     "\n"
     "--blur-method algorithm\n"
     "  Specify the algorithm for background blur. It is either one of:\n"
-    "    convolution (default), kawase\n"
+    "    convolution (default), dual_kawase\n"
     "\n"
     "--blur-strength level\n"
-    "  Only valid for '--blur-method kawase'!\n"
-    "  The strength of the kawase blur as an integer between 1 and 20. Defaults to 5.\n"
+    "  Only valid for '--blur-method dual_kawase'!\n"
+    "  The strength of the dual_kawase blur as an integer between 1 and 20. Defaults to 5.\n"
     "\n"
     "--blur-kern matrix\n"
     "  Only valid for '--blur-method convolution'!\n"
@@ -6127,9 +6128,13 @@ get_cfg(session_t *ps, int argc, char *const *argv, bool first_pass) {
     ps->o.track_leader = true;
   }
 
-  // Blur method kawase is not compatible with the xrender backend
-  if (ps->o.backend != BKEND_GLX && ps->o.blur_method == BLRMTHD_KAWASE) {
-      printf_errf("(): Blur method 'kawase' is incompatible with the XRender backend. Fall back to default.\n");
+  // Blur method dual_kawase is not compatible with the xrender backend
+  if (ps->o.blur_method == BLRMTHD_KAWASE) {
+      printf_errf("(): Blur method 'kawase' has been renamed to 'dual_kawase'. It is interpreted as 'dual_kawase' for now.");
+      ps->o.blur_method = BLRMTHD_DUALKAWASE;
+  }
+  if (ps->o.backend != BKEND_GLX && (ps->o.blur_method == BLRMTHD_KAWASE || ps->o.blur_method == BLRMTHD_DUALKAWASE)) {
+      printf_errf("(): Blur method 'dual_kawase' is incompatible with the XRender backend. Fall back to default.\n");
       ps->o.blur_method = BLRMTHD_CONV;
   }
 

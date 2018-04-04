@@ -206,13 +206,13 @@ OPTIONS
 	Use fixed blur strength rather than adjusting according to window opacity.
 
 *--blur-method* 'ALGORITHM'::
-	Specify the algorithm for background blur. It is either one of: `convolution` (default), `kawase`.
+	Specify the algorithm for background blur. It is either one of: `convolution` (default), `dual_kawase`.
 +
-Note: `kawase` only works with the `glx` backend.
+Note: `dual_kawase` only works with the `glx` backend.
 
 *--blur-strength* 'LEVEL'::
-	Only valid for *--blur-method kawase*!
-	The strength of the kawase blur as an integer between 1 and 20. Defaults to 5.
+	Only valid for *--blur-method dual_kawase*!
+	The strength of the dual_kawase blur as an integer between 1 and 20. Defaults to 5.
 
 *--blur-kern* 'MATRIX'::
 	Only valid for *--blur-method convolution*!

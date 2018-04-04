@@ -4,8 +4,8 @@
 
 __Compton__ is a compositor for X, and a fork of __xcompmgr-dana__.
 
-This branch includes a new blur method: The multi-pass **dual kawase blur**!
-Use it with the `--blur-method kawase` and `--blur-strength LEVEL` options.
+This branch includes a new blur method: The multi-pass **dual_kawase blur**!
+Use it with the `--blur-method dual_kawase` and `--blur-strength LEVEL` options.
 Only works with the `glx` backend!
 
 I was frustrated by the low amount of standalone lightweight compositors.

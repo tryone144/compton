@@ -356,6 +356,7 @@ typedef enum {
 enum blur_method {
     BLRMTHD_CONV,
     BLRMTHD_KAWASE,
+    BLRMTHD_DUALKAWASE,
     NUM_BLRMTHD,
 };
 
@@ -480,11 +481,11 @@ typedef struct {
   GLint unifm_offset_y;
   /// Location of uniform "factor_center" in conv-blur GLSL program.
   GLint unifm_factor_center;
-  /// Location of uniform "offset" in kawase-blur GLSL program.
+  /// Location of uniform "offset" in (dual-filter) kawase-blur GLSL program.
   GLint unifm_offset;
-  /// Location of uniform "halfpixel" in kawase-blur GLSL program.
+  /// Location of uniform "halfpixel" in (dual-filter) kawase-blur GLSL program.
   GLint unifm_halfpixel;
-  /// Location of uniform "fulltex" in kawase-blur GLSL program.
+  /// Location of uniform "fulltex" in (dual-filter) kawase-blur GLSL program.
   GLint unifm_fulltex;
 } glx_blur_pass_t;
 

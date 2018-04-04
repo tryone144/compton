@@ -529,7 +529,7 @@ glx_init_conv_blur(session_t *ps) {
 }
 
 bool
-glx_init_kawase_blur(session_t *ps) {
+glx_init_dualkawase_blur(session_t *ps) {
   // Allocate PBO to check for multi-pass support
 #ifdef CONFIG_VSYNC_OPENGL_FBO
   {
@@ -654,7 +654,7 @@ glx_init_kawase_blur(session_t *ps) {
 #undef P_GET_UNIFM_LOC
     }
 
-    // Build kawase downsample shader
+    // Build kawase upsample shader
     glx_blur_pass_t *up_pass = &ps->psglx->blur_passes[1];
     {
       int len = strlen(FRAG_SHADER_PREFIX) + strlen(extension) + strlen(sampler_type) + strlen(texture_func) + strlen(FRAG_SHADER_KAWASE_UP) + 1;
@@ -721,7 +721,8 @@ glx_init_blur(session_t *ps) {
     case BLRMTHD_CONV:
       return glx_init_conv_blur(ps);
     case BLRMTHD_KAWASE:
-      return glx_init_kawase_blur(ps);
+    case BLRMTHD_DUALKAWASE:
+      return glx_init_dualkawase_blur(ps);
     default:
       return false;
   }
@@ -1582,7 +1583,7 @@ glx_conv_blur_dst_end:
 }
 
 bool
-glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float z,
+glx_dualkawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float z,
     XserverRegion reg_tgt, const reg_data_t *pcache_reg,
     glx_blur_cache_t *pbc) {
   const bool have_scissors = glIsEnabled(GL_SCISSOR_TEST);
@@ -1634,17 +1635,17 @@ glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float 
 
   if (!tex_scr) {
     printf_errf("(): Failed to allocate texture.");
-    goto glx_kawase_blur_dst_end;
+    goto glx_dualkawase_blur_dst_end;
   }
   for (int i = 1; i <= iterations; i++) {
     if (!pbc->textures[i]) {
       printf_errf("(): Failed to allocate additional textures.");
-      goto glx_kawase_blur_dst_end;
+      goto glx_dualkawase_blur_dst_end;
     }
   }
   if (!fbo) {
     printf_errf("(): Failed to allocate framebuffer.");
-    goto glx_kawase_blur_dst_end;
+    goto glx_dualkawase_blur_dst_end;
   }
 
   // Read destination pixels into a texture
@@ -1656,7 +1657,7 @@ glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float 
   glDisable(GL_STENCIL_TEST);
   glDisable(GL_SCISSOR_TEST);
 
-  // First pass(es): Kawase Downsample
+  // First pass: Kawase Downsample
   for (int i = 1; i <= iterations; i++) {
     const glx_blur_pass_t *down_pass = &ps->psglx->blur_passes[0];
     assert(down_pass->prog);
@@ -1676,7 +1677,7 @@ glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float 
     glDrawBuffers(1, DRAWBUFS);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
       printf_errf("(): Framebuffer attachment failed.");
-      goto glx_kawase_blur_dst_end;
+      goto glx_dualkawase_blur_dst_end;
     }
 
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
@@ -1715,7 +1716,7 @@ glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float 
     P_PAINTREG_END();
   }
 
-  // Second pass(es): Kawase Upsample
+  // Second pass: Kawase Upsample
   for (int i = iterations; i >= 1; i--) {
     const glx_blur_pass_t *up_pass = &ps->psglx->blur_passes[1];
     bool is_last = (i == 1);
@@ -1740,7 +1741,7 @@ glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float 
       glDrawBuffers(1, DRAWBUFS);
       if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         printf_errf("(): Framebuffer attachment failed.");
-        goto glx_kawase_blur_dst_end;
+        goto glx_dualkawase_blur_dst_end;
       }
     } else {
       static const GLenum DRAWBUFS[2] = { GL_BACK };
@@ -1802,7 +1803,7 @@ glx_kawase_blur_dst(session_t *ps, int dx, int dy, int width, int height, float 
   glUseProgram(0);
   ret = true;
 
-glx_kawase_blur_dst_end:
+glx_dualkawase_blur_dst_end:
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glBindTexture(tex_tgt, 0);
   glDisable(tex_tgt);
@@ -1832,7 +1833,8 @@ glx_blur_dst(session_t *ps, int dx, int dy, int width, int height, float z,
         factor_center, reg_tgt, pcache_reg, pbc);
       break;
     case BLRMTHD_KAWASE:
-      ret = glx_kawase_blur_dst(ps, dx, dy, width, height, z,
+    case BLRMTHD_DUALKAWASE:
+      ret = glx_dualkawase_blur_dst(ps, dx, dy, width, height, z,
         reg_tgt, pcache_reg, pbc);
       break;
     default:
