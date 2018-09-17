@@ -621,7 +621,7 @@ glx_init_kawase_blur(session_t *ps) {
       pc += strlen(pc);
       assert(strlen(shader_str) < len);
 
-      sprintf(pc, FRAG_SHADER_KAWASE_DOWN);
+      printf(pc, FRAG_SHADER_KAWASE_DOWN);
       assert(strlen(shader_str) < len);
 #ifdef DEBUG_GLX
       printf_dbgf("(): Generated kawase downsample shader:\n%s\n", shader_str);
@@ -669,7 +669,7 @@ glx_init_kawase_blur(session_t *ps) {
       pc += strlen(pc);
       assert(strlen(shader_str) < len);
 
-      sprintf(pc, FRAG_SHADER_KAWASE_UP);
+      printf(pc, FRAG_SHADER_KAWASE_UP);
       assert(strlen(shader_str) < len);
 #ifdef DEBUG_GLX
       printf_dbgf("(): Generated kawase upsample shader:\n%s\n", shader_str);
