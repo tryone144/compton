@@ -3,6 +3,10 @@ picom
 
 **This is a development branch, bugs to be expected**
 
+**[WIP] Merge-branch for the *dual_kawase* blur shader**
+
+This branch includes a new blur method: The fast and good-looking *dual-filter kawase blur*! Use it with `--blur-method dual_kawase` and configure it with `--blur-strength LEVEL`. Only works with `--experimental-backends` and `--backend glx`!
+
 This is forked from the original Compton because it seems to have become unmaintained.
 
 The current battle plan of this fork is to refactor it to make the code _possible_ to maintain, so potential contributors won't be scared away when they take a look at the code.
