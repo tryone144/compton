@@ -10,7 +10,7 @@ APPDIR ?= $(PREFIX)/share/applications
 ICODIR ?= $(PREFIX)/share/icons/hicolor/
 
 PACKAGES = x11 xcomposite xfixes xdamage xrender xext xrandr
-LIBS = -lm -lrt
+LIBS = -lm -lrt -lpthread
 INCS =
 
 OBJS = compton.o

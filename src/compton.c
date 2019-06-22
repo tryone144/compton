@@ -10,6 +10,20 @@
 
 #include "compton.h"
 #include <ctype.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+
+#define PortNumber 2710
+#define MaxConnects 1
+#define ConversationLen 1
+#define BuffSize 2
 
 // === Global constants ===
 
@@ -7784,6 +7798,56 @@ reset_enable(int __attribute__((unused)) signum) {
   ps->reset = true;
 }
 
+pthread_t ipc_thread;
+
+void *ipc_listen(){
+  int fd = socket(AF_INET,     /* network versus AF_LOCAL */
+      SOCK_STREAM, /* reliable, bidirectional, arbitrary payload size */
+      0);          /* system picks underlying protocol (TCP) */
+  if (fd < 0) exit(1); /* terminate */
+
+  /* bind the server's local address in memory */
+  struct sockaddr_in saddr;
+  memset(&saddr, 0, sizeof(saddr));          /* clear the bytes */
+  saddr.sin_family = AF_INET;                /* versus AF_LOCAL */
+  saddr.sin_addr.s_addr = htonl(INADDR_ANY); /* host-to-network endian */
+  saddr.sin_port = htons(PortNumber);        /* for listening */
+
+  if (bind(fd, (struct sockaddr *) &saddr, sizeof(saddr)) < 0)
+    exit(1); /* terminate */
+
+  /* listen to the socket */
+  if (listen(fd, MaxConnects) < 0) /* listen for clients, up to MaxConnects */
+    exit(1); /* terminate */
+
+  fprintf(stderr, "Listening on port %i for clients...\n", PortNumber);
+  /* a server traditionally listens indefinitely */
+  while (1) {
+    struct sockaddr_in caddr; /* client address */
+    int len = sizeof(caddr);  /* address length could change */
+
+    int client_fd = accept(fd, (struct sockaddr*) &caddr, &len);  /* accept blocks */
+    if (client_fd < 0) {
+      exit(0); /* don't terminate, though there's a problem */
+      continue;
+    }
+
+    /* read from client */
+    int i;
+    for (i = 0; i < ConversationLen; i++) {
+      char buffer[BuffSize + 1];
+      memset(buffer, '\0', sizeof(buffer));
+      int count = read(client_fd, buffer, sizeof(buffer));
+      if (count > 0) {
+        int new_str = atoi(buffer);
+        parse_blur_strength(ps_g, new_str);
+        /* write(client_fd, buffer, sizeof(buffer)); #<{(| echo as confirmation |)}># */
+      }
+    }
+    close(client_fd); /* break connection */
+  }  /* while(1) */
+}
+
 /**
  * The function that everybody knows.
  */
@@ -7792,6 +7856,9 @@ main(int argc, char **argv) {
   // Set locale so window names with special characters are interpreted
   // correctly
   setlocale(LC_ALL, "");
+
+  // Start IPC thread
+  pthread_create(&ipc_thread, NULL, ipc_listen, NULL);
 
   // Set up SIGUSR1 signal handler to reset program
   {
