@@ -551,10 +551,12 @@ struct _timeout_t;
 
 struct _win;
 
-typedef struct {
-  int iterations;
-  float offset;
-} blur_strength_t;
+typedef struct { 
+   int level; 
+   int iterations; 
+   float offset; 
+   int expand; 
+} blur_strength_t; 
 
 typedef struct _c2_lptr c2_lptr_t;
 
@@ -1711,29 +1713,28 @@ parse_blur_method(session_t *ps, const char *str) {
  */
 static inline bool
 parse_blur_strength(session_t *ps, const int level) {
-  static const blur_strength_t values[20] = {
-    { .iterations = 1, .offset = 1.5 },     // 1
-    { .iterations = 1, .offset = 2.0 },     // 2
-    { .iterations = 2, .offset = 2.5 },     // 3
-    { .iterations = 2, .offset = 3.0 },     // 4
-    { .iterations = 3, .offset = 2.75 },    // 5
-    { .iterations = 3, .offset = 3.5 },     // 6
-    { .iterations = 3, .offset = 4.25 },    // 7
-    { .iterations = 3, .offset = 5.0 },     // 8
-    { .iterations = 4, .offset = 3.71429 }, // 9
-    { .iterations = 4, .offset = 4.42857 }, // 10
-    { .iterations = 4, .offset = 5.14286 }, // 11
-    { .iterations = 4, .offset = 5.85714 }, // 12
-    { .iterations = 4, .offset = 6.57143 }, // 13
-    { .iterations = 4, .offset = 7.28571 }, // 14
-    { .iterations = 4, .offset = 8.0 },     // 15
-    { .iterations = 5, .offset = 6.0 },     // 16
-    { .iterations = 5, .offset = 7.0 },     // 17
-    { .iterations = 5, .offset = 8.0 },     // 18
-    { .iterations = 5, .offset = 9.0 },     // 19
-    { .iterations = 5, .offset = 10.0 },    // 20
-  };
-
+  static const blur_strength_t values[20] = { 
+    { .level =  1, .iterations = 1, .offset =  1.5    , .expand = 10 }, // 1 
+    { .level =  2, .iterations = 1, .offset =  2.0    , .expand = 10 }, // 2 
+    { .level =  3, .iterations = 2, .offset =  2.5    , .expand = 20 }, // 3 
+    { .level =  4, .iterations = 2, .offset =  3.0    , .expand = 20 }, // 4 
+    { .level =  5, .iterations = 3, .offset =  2.75   , .expand = 50 }, // 5 
+    { .level =  6, .iterations = 3, .offset =  3.5    , .expand = 50 }, // 6 
+    { .level =  7, .iterations = 3, .offset =  4.25   , .expand = 50 }, // 7 
+    { .level =  8, .iterations = 3, .offset =  5.0    , .expand = 50 }, // 8 
+    { .level =  9, .iterations = 4, .offset =  3.71429, .expand = 150 }, // 9 
+    { .level = 10, .iterations = 4, .offset =  4.42857, .expand = 150 }, // 10 
+    { .level = 11, .iterations = 4, .offset =  5.14286, .expand = 150 }, // 11 
+    { .level = 12, .iterations = 4, .offset =  5.85714, .expand = 150 }, // 12 
+    { .level = 13, .iterations = 4, .offset =  6.57143, .expand = 150 }, // 13 
+    { .level = 14, .iterations = 4, .offset =  7.28571, .expand = 150 }, // 14 
+    { .level = 15, .iterations = 4, .offset =  8.0    , .expand = 150 }, // 15 
+    { .level = 16, .iterations = 5, .offset =  6.0    , .expand = 400 }, // 16 
+    { .level = 17, .iterations = 5, .offset =  7.0    , .expand = 400 }, // 17 
+    { .level = 18, .iterations = 5, .offset =  8.0    , .expand = 400 }, // 18 
+    { .level = 19, .iterations = 5, .offset =  9.0    , .expand = 400 }, // 19 
+    { .level = 20, .iterations = 5, .offset = 10.0    , .expand = 400 }, // 20 
+  }; 
   if (level < 1 || level > 20) {
     printf_errf("(\"%d\"): Invalid blur_strength argument. Needs to be a number between 1 and 20.", level);
     return false;
