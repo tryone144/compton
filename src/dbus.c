@@ -1,3 +1,4 @@
+
 /*
  * Compton - a compositor for X11
  *
@@ -817,6 +818,23 @@ cdbus_process_win_set(session_t *ps, DBusMessage *msg) {
     if (!cdbus_msg_get_arg(msg, 2, CDBUS_TYPE_ENUM, &val))
       return false;
     win_set_invert_color_force(ps, w, val);
+    goto cdbus_process_win_set_success;
+  }
+
+  if (!strcmp("set_blur_strength", target)) {
+    cdbus_enum_t val = UNSET;
+    if (!cdbus_msg_get_arg(msg, 2, CDBUS_TYPE_ENUM, &val))
+      return false;
+    parse_blur_strength(ps, val);
+    goto cdbus_process_win_set_success;
+  }
+
+  if (!strcmp("inc_blur_strength", target)) {
+    cdbus_enum_t val = UNSET;
+    if (!cdbus_msg_get_arg(msg, 2, CDBUS_TYPE_ENUM, &val))
+      return false;
+    int signed_val = val == 65535 ? -1 : 1;
+    parse_blur_strength(ps, ps->o.blur_strength.level + signed_val);
     goto cdbus_process_win_set_success;
   }
 #undef cdbus_m_win_set_do
