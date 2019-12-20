@@ -65,6 +65,11 @@ struct kernel_blur_args {
 	int kernel_count;
 };
 
+struct dual_kawase_blur_args {
+	int size;
+	int strength;
+};
+
 struct backend_operations {
 	// ===========    Initialization    ===========
 
