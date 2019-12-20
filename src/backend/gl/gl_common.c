@@ -546,6 +546,7 @@ void gl_compose(backend_t *base, void *image_data, int dst_x, int dst_y,
  * Blur contents in a particular region.
  */
 bool gl_kernel_blur(backend_t *base, double opacity, void *ctx, const rect_t *extent,
+                    const int width attr_unused, const int height attr_unused,
                     const int nrects, const GLuint vao[2]) {
 	struct gl_blur_context *bctx = ctx;
 	struct gl_data *gd = (void *)base;
@@ -619,12 +620,21 @@ bool gl_kernel_blur(backend_t *base, double opacity, void *ctx, const rect_t *ex
 }
 
 bool gl_dual_kawase_blur(backend_t *base, double opacity, void *ctx, const rect_t *extent,
-                         const int nrects, const GLuint vao[2]) {
+                         const int width, const int height, const int nrects,
+                         const GLuint vao[2]) {
 	struct gl_blur_context *bctx = ctx;
 	struct gl_data *gd = (void *)base;
 
 	int dst_y_screen_coord = gd->height - extent->y2,
 	    dst_y_fb_coord = bctx->fb_height - extent->y2;
+
+	// Reduce number of iterations until the last one renders at least 1px in both
+	// dimensions
+	int iterations = bctx->blur_texture_count;
+	while (((width / (1 << iterations)) < 1 || (height / (1 << iterations)) < 1) &&
+	       iterations > 0) {
+		--iterations;
+	}
 
 	// Note: OpenGL matrices are column major
 	GLfloat projection_matrix[4][4] = {{2.0f / (GLfloat)bctx->fb_width, 0, 0, 0},
@@ -642,7 +652,7 @@ bool gl_dual_kawase_blur(backend_t *base, double opacity, void *ctx, const rect_
 	glUniform2f(down_pass->orig_loc, (GLfloat)bctx->resize_width,
 	            -(GLfloat)bctx->resize_height);
 
-	for (int i = 0; i < bctx->blur_texture_count; ++i) {
+	for (int i = 0; i < iterations; ++i) {
 		GLuint src_texture;
 		int tex_width, tex_height;
 		int texorig_x, texorig_y;
@@ -702,7 +712,7 @@ bool gl_dual_kawase_blur(backend_t *base, double opacity, void *ctx, const rect_
 	glUniform2f(up_pass->unifm_texture_size, (GLfloat)bctx->fb_width,
 	            (GLfloat)bctx->fb_height);
 
-	for (int i = bctx->blur_texture_count - 1; i >= 0; --i) {
+	for (int i = iterations - 1; i >= 0; --i) {
 		const GLuint src_texture = bctx->blur_textures[i];
 		int orig_x, orig_y;
 
@@ -895,9 +905,11 @@ bool gl_blur(backend_t *base, double opacity, void *ctx, const region_t *reg_blu
 	                      sizeof(GLint) * 4, (void *)(sizeof(GLint) * 2));
 
 	if (bctx->method == BLUR_METHOD_DUAL_KAWASE) {
-		ret = gl_dual_kawase_blur(base, opacity, ctx, extent_resized, nrects, vao);
+		ret = gl_dual_kawase_blur(base, opacity, ctx, extent_resized, width,
+		                          height, nrects, vao);
 	} else {
-		ret = gl_kernel_blur(base, opacity, ctx, extent_resized, nrects, vao);
+		ret = gl_kernel_blur(base, opacity, ctx, extent_resized, width, height,
+		                     nrects, vao);
 	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
