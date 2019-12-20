@@ -362,6 +362,20 @@ struct conv **generate_blur_kernel(enum blur_method method, void *args, int *ker
 	return NULL;
 }
 
+/// Generate kernel parameters for dual-kawase blur method. Falls back on approximating
+/// standard gauss radius if strength is not supplied
+struct dual_kawase_params *generate_dual_kawase_params(void *args) {
+	struct dual_kawase_blur_args *blur_args = args;
+
+	// TODO: create real parameters from supplied arguments
+	auto params = ccalloc(1, struct dual_kawase_params);
+	params->iterations = 3;
+	params->offset = 3.25f;
+	params->expand = 20;
+
+	return params;
+}
+
 void init_backend_base(struct backend_base *base, session_t *ps) {
 	base->c = ps->c;
 	base->loop = ps->loop;
