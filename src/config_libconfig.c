@@ -627,6 +627,11 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 		}
 
 		config_setting_lookup_int(blur_cfg, "size", &opt->blur_radius);
+		if (opt->blur_method == BLUR_METHOD_DUAL_KAWASE && opt->blur_radius > 500) {
+			log_warn("Blur radius >500 not supported by dual_kawase method, "
+			         "capping to 500.");
+			opt->blur_radius = 500;
+		}
 
 		if (config_setting_lookup_string(blur_cfg, "kernel", &sval)) {
 			opt->blur_kerns = parse_blur_kern_lst(sval, conv_kern_hasneg,
@@ -638,6 +643,11 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 
 		config_setting_lookup_float(blur_cfg, "deviation", &opt->blur_deviation);
 		config_setting_lookup_int(blur_cfg, "strength", &opt->blur_strength);
+		if (opt->blur_method == BLUR_METHOD_DUAL_KAWASE && opt->blur_strength > 20) {
+			log_warn("Blur strength >20 not supported by dual_kawase method, "
+			         "capping to 20.");
+			opt->blur_strength = 20;
+		}
 	}
 
 	// Wintype settings
