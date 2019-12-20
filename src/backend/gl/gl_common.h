@@ -33,8 +33,11 @@ typedef struct {
 typedef struct {
 	GLuint prog;
 	GLint unifm_opacity;
+	GLint unifm_texture_size;
+	GLint unifm_halfpixel;
 	GLint orig_loc;
 	GLint texorig_loc;
+	GLint projection_loc;
 } gl_blur_shader_t;
 
 typedef struct {
@@ -168,7 +171,8 @@ static inline void gl_check_err_(const char *func, int line) {
 }
 
 static inline void gl_clear_err(void) {
-	while (glGetError() != GL_NO_ERROR);
+	while (glGetError() != GL_NO_ERROR)
+		;
 }
 
 #define gl_check_err() gl_check_err_(__func__, __LINE__)
