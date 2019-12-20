@@ -537,10 +537,95 @@ void gl_compose(backend_t *base, void *image_data, int dst_x, int dst_y,
 /**
  * Blur contents in a particular region.
  */
+bool gl_kernel_blur(backend_t *base, double opacity, void *ctx, const rect_t *extent,
+                    const int nrects, const GLuint vao[2]) {
+	struct gl_blur_context *bctx = ctx;
+	struct gl_data *gd = (void *)base;
+
+	int dst_y_screen_coord = gd->height - extent->y2,
+	    dst_y_fb_coord = bctx->texture_height - extent->y2;
+
+	int curr = 0;
+	for (int i = 0; i < bctx->npasses; ++i) {
+		const gl_blur_shader_t *p = &bctx->blur_shader[i];
+		assert(p->prog);
+
+		assert(bctx->blur_texture[curr]);
+
+		// The origin to use when sampling from the source texture
+		GLint texorig_x, texorig_y;
+		GLuint src_texture;
+
+		if (i == 0) {
+			texorig_x = extent->x1;
+			texorig_y = dst_y_screen_coord;
+			src_texture = gd->back_texture;
+		} else {
+			texorig_x = extent->x1 + bctx->resize_width;
+			texorig_y = dst_y_fb_coord - bctx->resize_height;
+			src_texture = bctx->blur_texture[curr];
+		}
+
+		glBindTexture(GL_TEXTURE_2D, src_texture);
+		glUseProgram(p->prog);
+		if (i < bctx->npasses - 1) {
+			// not last pass, draw into framebuffer, with resized regions
+			glBindVertexArray(vao[1]);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bctx->blur_fbo);
+
+			glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+			                       GL_TEXTURE_2D, bctx->blur_texture[!curr], 0);
+			glDrawBuffer(GL_COLOR_ATTACHMENT0);
+			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+				log_error("Framebuffer attachment failed.");
+				return false;
+			}
+
+			glUniform1f(p->unifm_opacity, 1.0);
+
+			glUniform2f(p->orig_loc, (GLfloat)bctx->resize_width,
+			            -(GLfloat)bctx->resize_height);
+			glViewport(0, 0, bctx->texture_width, bctx->texture_height);
+		} else {
+			// last pass, draw directly into the back buffer, with origin
+			// regions
+			glBindVertexArray(vao[0]);
+			glBindFramebuffer(GL_FRAMEBUFFER, gd->back_fbo);
+
+			glUniform1f(p->unifm_opacity, (float)opacity);
+
+			glUniform2f(p->orig_loc, 0, 0);
+			glViewport(0, 0, gd->width, gd->height);
+		}
+
+		glUniform2f(p->texorig_loc, (GLfloat)texorig_x, (GLfloat)texorig_y);
+		glDrawElements(GL_TRIANGLES, nrects * 6, GL_UNSIGNED_INT, NULL);
+
+		// XXX use multiple draw calls is probably going to be slow than
+		//     just simply blur the whole area.
+
+		curr = !curr;
+	}
+
+	return true;
+}
+
+bool gl_dual_kawase_blur(backend_t *base, double opacity, void *ctx, const rect_t *extent,
+                         const int nrects, const GLuint vao[2]) {
+	struct gl_blur_context *bctx = ctx;
+	struct gl_data *gd = (void *)base;
+
+	// TODO: Blur with dual_kawase shaders
+
+	return false;
+}
+
 bool gl_blur(backend_t *base, double opacity, void *ctx, const region_t *reg_blur,
              const region_t *reg_visible attr_unused) {
 	struct gl_blur_context *bctx = ctx;
 	struct gl_data *gd = (void *)base;
+
+	bool ret = false;
 
 	if (gd->width + bctx->resize_width * 2 != bctx->texture_width ||
 	    gd->height + bctx->resize_height * 2 != bctx->texture_height) {
@@ -549,39 +634,42 @@ bool gl_blur(backend_t *base, double opacity, void *ctx, const region_t *reg_blu
 		bctx->texture_width = gd->width + bctx->resize_width * 2;
 		bctx->texture_height = gd->height + bctx->resize_height * 2;
 
-		glBindTexture(GL_TEXTURE_2D, bctx->blur_texture[0]);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bctx->texture_width,
-		             bctx->texture_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
-		glBindTexture(GL_TEXTURE_2D, bctx->blur_texture[1]);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bctx->texture_width,
-		             bctx->texture_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+		if (bctx->method == BLUR_METHOD_DUAL_KAWASE) {
+			// TODO: Use smaller textures for each iteration
+		} else {
+			glBindTexture(GL_TEXTURE_2D, bctx->blur_texture[0]);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bctx->texture_width,
+			             bctx->texture_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+			glBindTexture(GL_TEXTURE_2D, bctx->blur_texture[1]);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, bctx->texture_width,
+			             bctx->texture_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
 
-		// XXX: do we need projection matrix for blur at all?
-		// Note: OpenGL matrices are column major
-		GLfloat projection_matrix[4][4] = {
-		    {2.0f / (GLfloat)bctx->texture_width, 0, 0, 0},
-		    {0, 2.0f / (GLfloat)bctx->texture_height, 0, 0},
-		    {0, 0, 0, 0},
-		    {-1, -1, 0, 1}};
+			// XXX: do we need projection matrix for blur at all?
+			// Note: OpenGL matrices are column major
+			GLfloat projection_matrix[4][4] = {
+			    {2.0f / (GLfloat)bctx->texture_width, 0, 0, 0},
+			    {0, 2.0f / (GLfloat)bctx->texture_height, 0, 0},
+			    {0, 0, 0, 0},
+			    {-1, -1, 0, 1}};
 
-		// Update projection matrices in the blur shaders
-		for (int i = 0; i < bctx->npasses - 1; i++) {
-			assert(bctx->blur_shader[i].prog);
-			glUseProgram(bctx->blur_shader[i].prog);
-			int pml = glGetUniformLocationChecked(bctx->blur_shader[i].prog,
-			                                      "projection");
-			glUniformMatrix4fv(pml, 1, false, projection_matrix[0]);
+			// Update projection matrices in the blur shaders
+			for (int i = 0; i < bctx->npasses - 1; i++) {
+				assert(bctx->blur_shader[i].prog);
+				glUseProgram(bctx->blur_shader[i].prog);
+				glUniformMatrix4fv(bctx->blur_shader[i].projection_loc, 1,
+				                   false, projection_matrix[0]);
+			}
+
+			GLfloat projection_matrix2[4][4] = {
+			    {2.0f / (GLfloat)gd->width, 0, 0, 0},
+			    {0, 2.0f / (GLfloat)gd->height, 0, 0},
+			    {0, 0, 0, 0},
+			    {-1, -1, 0, 1}};
+			assert(bctx->blur_shader[bctx->npasses - 1].prog);
+			glUseProgram(bctx->blur_shader[bctx->npasses - 1].prog);
+			glUniformMatrix4fv(bctx->blur_shader[bctx->npasses - 1].projection_loc,
+			                   1, false, projection_matrix2[0]);
 		}
-
-		GLfloat projection_matrix2[4][4] = {{2.0f / (GLfloat)gd->width, 0, 0, 0},
-		                                    {0, 2.0f / (GLfloat)gd->height, 0, 0},
-		                                    {0, 0, 0, 0},
-		                                    {-1, -1, 0, 1}};
-		assert(bctx->blur_shader[bctx->npasses - 1].prog);
-		glUseProgram(bctx->blur_shader[bctx->npasses - 1].prog);
-		int pml = glGetUniformLocationChecked(
-		    bctx->blur_shader[bctx->npasses - 1].prog, "projection");
-		glUniformMatrix4fv(pml, 1, false, projection_matrix2[0]);
 	}
 
 	// Remainder: regions are in Xorg coordinates
@@ -590,13 +678,10 @@ bool gl_blur(backend_t *base, double opacity, void *ctx, const region_t *reg_blu
 	const rect_t *extent = pixman_region32_extents((region_t *)reg_blur),
 	             *extent_resized = pixman_region32_extents(&reg_blur_resized);
 	int width = extent->x2 - extent->x1, height = extent->y2 - extent->y1;
-	int dst_y_resized_screen_coord = gd->height - extent_resized->y2,
-	    dst_y_resized_fb_coord = bctx->texture_height - extent_resized->y2;
 	if (width == 0 || height == 0) {
 		return true;
 	}
 
-	bool ret = false;
 	int nrects, nrects_resized;
 	const rect_t *rects = pixman_region32_rectangles((region_t *)reg_blur, &nrects),
 	             *rects_resized =
@@ -648,69 +733,12 @@ bool gl_blur(backend_t *base, double opacity, void *ctx, const region_t *reg_blu
 	glVertexAttribPointer(vert_in_texcoord_loc, 2, GL_INT, GL_FALSE,
 	                      sizeof(GLint) * 4, (void *)(sizeof(GLint) * 2));
 
-	int curr = 0;
-	for (int i = 0; i < bctx->npasses; ++i) {
-		const gl_blur_shader_t *p = &bctx->blur_shader[i];
-		assert(p->prog);
-
-		assert(bctx->blur_texture[curr]);
-
-		// The origin to use when sampling from the source texture
-		GLint texorig_x, texorig_y;
-		GLuint src_texture;
-
-		if (i == 0) {
-			texorig_x = extent_resized->x1;
-			texorig_y = dst_y_resized_screen_coord;
-			src_texture = gd->back_texture;
-		} else {
-			texorig_x = 0;
-			texorig_y = 0;
-			src_texture = bctx->blur_texture[curr];
-		}
-
-		glBindTexture(GL_TEXTURE_2D, src_texture);
-		glUseProgram(p->prog);
-		if (i < bctx->npasses - 1) {
-			// not last pass, draw into framebuffer, with resized regions
-			glBindVertexArray(vao[1]);
-			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bctx->blur_fbo);
-
-			glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-			                       GL_TEXTURE_2D, bctx->blur_texture[!curr], 0);
-			glDrawBuffer(GL_COLOR_ATTACHMENT0);
-			if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-				log_error("Framebuffer attachment failed.");
-				goto end;
-			}
-			glUniform1f(p->unifm_opacity, 1.0);
-			// For other than last pass, we are drawing to a texture, we
-			// translate the render origin so we don't need a big texture
-			glUniform2f(p->orig_loc, -(GLfloat)extent_resized->x1,
-			            -(GLfloat)dst_y_resized_fb_coord);
-			glViewport(0, 0, bctx->texture_width, bctx->texture_height);
-		} else {
-			// last pass, draw directly into the back buffer, with origin
-			// regions
-			glBindVertexArray(vao[0]);
-			glBindFramebuffer(GL_FRAMEBUFFER, gd->back_fbo);
-			glUniform1f(p->unifm_opacity, (float)opacity);
-			glUniform2f(p->orig_loc, 0, 0);
-			glViewport(0, 0, gd->width, gd->height);
-		}
-
-		glUniform2f(p->texorig_loc, (GLfloat)texorig_x, (GLfloat)texorig_y);
-		glDrawElements(GL_TRIANGLES, nrects * 6, GL_UNSIGNED_INT, NULL);
-
-		// XXX use multiple draw calls is probably going to be slow than
-		//     just simply blur the whole area.
-
-		curr = !curr;
+	if (bctx->method == BLUR_METHOD_DUAL_KAWASE) {
+		ret = gl_dual_kawase_blur(base, opacity, ctx, extent_resized, nrects, vao);
+	} else {
+		ret = gl_kernel_blur(base, opacity, ctx, extent_resized, nrects, vao);
 	}
 
-	ret = true;
-
-end:
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -718,6 +746,7 @@ end:
 	glDeleteBuffers(4, bo);
 	glBindVertexArray(0);
 	glDeleteVertexArrays(2, vao);
+	glUseProgram(0);
 
 	free(indices);
 	free(coord);
@@ -725,7 +754,6 @@ end:
 	free(coord_resized);
 
 	gl_check_err();
-
 	return ret;
 }
 
@@ -978,23 +1006,11 @@ void gl_destroy_blur_context(backend_t *base attr_unused, void *ctx) {
 /**
  * Initialize GL blur filters.
  */
-void *gl_create_blur_context(backend_t *base, enum blur_method method, void *args) {
-	bool success = true;
-	auto gd = (struct gl_data *)base;
+bool gl_create_kernel_blur_context(void *blur_context, enum blur_method method, void *args) {
+	bool success;
 
+	struct gl_blur_context *ctx = blur_context;
 	struct conv **kernels;
-	auto ctx = ccalloc(1, struct gl_blur_context);
-
-	if (!method || method >= BLUR_METHOD_INVALID) {
-		ctx->method = BLUR_METHOD_NONE;
-		return ctx;
-	}
-
-	if (method == BLUR_METHOD_DUAL_KAWASE) {
-		log_warn("Blur method 'dual_kawase' is not yet implemented.");
-		ctx->method = BLUR_METHOD_NONE;
-		return ctx;
-	}
 
 	int nkernels;
 	ctx->method = BLUR_METHOD_KERNEL;
@@ -1007,7 +1023,7 @@ void *gl_create_blur_context(backend_t *base, enum blur_method method, void *arg
 
 	if (!nkernels) {
 		ctx->method = BLUR_METHOD_NONE;
-		return ctx;
+		return true;
 	}
 
 	ctx->blur_shader = ccalloc(max2(2, nkernels), gl_blur_shader_t);
@@ -1089,6 +1105,8 @@ void *gl_create_blur_context(backend_t *base, enum blur_method method, void *arg
 		pass->unifm_opacity = glGetUniformLocationChecked(pass->prog, "opacity");
 		pass->orig_loc = glGetUniformLocationChecked(pass->prog, "orig");
 		pass->texorig_loc = glGetUniformLocationChecked(pass->prog, "texorig");
+		pass->projection_loc =
+		    glGetUniformLocationChecked(pass->prog, "projection");
 		ctx->resize_width += kern->w / 2;
 		ctx->resize_height += kern->h / 2;
 	}
@@ -1101,27 +1119,14 @@ void *gl_create_blur_context(backend_t *base, enum blur_method method, void *arg
 		pass->unifm_opacity = -1;
 		pass->orig_loc = glGetUniformLocationChecked(pass->prog, "orig");
 		pass->texorig_loc = glGetUniformLocationChecked(pass->prog, "texorig");
+		pass->projection_loc =
+		    glGetUniformLocationChecked(pass->prog, "projection");
 		ctx->npasses = 2;
 	} else {
 		ctx->npasses = nkernels;
 	}
 
-	// Texture size will be defined by gl_blur
-	glGenTextures(2, ctx->blur_texture);
-	glBindTexture(GL_TEXTURE_2D, ctx->blur_texture[0]);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glBindTexture(GL_TEXTURE_2D, ctx->blur_texture[1]);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	// Generate FBO and textures when needed
-	glGenFramebuffers(1, &ctx->blur_fbo);
-	if (!ctx->blur_fbo) {
-		log_error("Failed to generate framebuffer object for blur");
-		success = false;
-		goto out;
-	}
-
+	success = true;
 out:
 	if (method != BLUR_METHOD_KERNEL) {
 		// We generated the blur kernels, so we need to free them
@@ -1131,15 +1136,72 @@ out:
 		free(kernels);
 	}
 
-	if (!success) {
-		gl_destroy_blur_context(&gd->base, ctx);
-		ctx = NULL;
-	}
-
 	free(extension);
 	// Restore LC_NUMERIC
 	setlocale(LC_NUMERIC, lc_numeric_old);
 	free(lc_numeric_old);
+
+	return success;
+}
+
+bool gl_create_dual_kawase_blur_context(void *blur_context, enum blur_method method,
+                                        void *args) {
+	bool success;
+	struct gl_blur_context *ctx = blur_context;
+
+	// TODO: Create and initialize down and upsample shader
+
+	log_warn("Blur method 'dual_kawase' is not yet implemented.");
+	ctx->method = BLUR_METHOD_NONE;
+	return true;
+}
+
+void *gl_create_blur_context(backend_t *base, enum blur_method method, void *args) {
+	bool success;
+	auto gd = (struct gl_data *)base;
+
+	auto ctx = ccalloc(1, struct gl_blur_context);
+
+	if (!method || method >= BLUR_METHOD_INVALID) {
+		ctx->method = BLUR_METHOD_NONE;
+		return ctx;
+	}
+
+	if (method == BLUR_METHOD_DUAL_KAWASE) {
+		success = gl_create_dual_kawase_blur_context(ctx, method, args);
+	} else {
+		success = gl_create_kernel_blur_context(ctx, method, args);
+	}
+	if (!success) {
+		goto out;
+	}
+
+	// Texture size will be defined by gl_blur
+	glBindTexture(GL_TEXTURE_2D, ctx->blur_texture[0]);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindTexture(GL_TEXTURE_2D, ctx->blur_texture[1]);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// Generate FBO and textures when needed
+	glGenFramebuffers(0, &ctx->blur_fbo);
+	if (!ctx->blur_fbo) {
+		log_error("Failed to generate framebuffer object for blur");
+		success = false;
+		goto out;
+	}
+
+out:
+	if (!success) {
+		gl_destroy_blur_context(&gd->base, ctx);
+		ctx = NULL;
+	}
 
 	gl_check_err();
 	return ctx;
@@ -1171,8 +1233,8 @@ const char *win_shader_glsl = GLSL(330,
 		vec3 rgb_brightness = texelFetch(brightness, ivec2(0, 0), 0).rgb;
 		// Ref: https://en.wikipedia.org/wiki/Relative_luminance
 		float brightness = rgb_brightness.r * 0.21 +
-		                   rgb_brightness.g * 0.72 +
-		                   rgb_brightness.b * 0.07;
+				   rgb_brightness.g * 0.72 +
+				   rgb_brightness.b * 0.07;
 		if (brightness > max_brightness)
 			c.rgb = c.rgb * (max_brightness / brightness);
 
@@ -1218,8 +1280,10 @@ bool gl_init(struct gl_data *gd, session_t *ps) {
 	}
 
 	glBindTexture(GL_TEXTURE_2D, gd->back_texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	gl_win_shader_from_string(vertex_shader, win_shader_glsl, &gd->win_shader);
@@ -1393,9 +1457,9 @@ void gl_present(backend_t *base, const region_t *region) {
 		// clang-format off
 		memcpy(&coord[i * 8],
 		       (GLint[]){rect[i].x1, gd->height - rect[i].y2,
-		                 rect[i].x2, gd->height - rect[i].y2,
-		                 rect[i].x2, gd->height - rect[i].y1,
-		                 rect[i].x1, gd->height - rect[i].y1},
+				 rect[i].x2, gd->height - rect[i].y2,
+				 rect[i].x2, gd->height - rect[i].y1,
+				 rect[i].x1, gd->height - rect[i].y1},
 		       sizeof(GLint) * 8);
 		// clang-format on
 
