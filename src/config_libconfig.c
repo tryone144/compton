@@ -426,8 +426,10 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 	lcfg_lookup_bool(&cfg, "use-damage", &opt->use_damage);
 
 	// --max-brightness
-	if (config_lookup_float(&cfg, "max-brightness", &opt->max_brightness) && opt->use_damage) {
-		log_warn("max-brightness requires use-damage = false. Falling back to 1.0");
+	if (config_lookup_float(&cfg, "max-brightness", &opt->max_brightness) &&
+	    opt->use_damage) {
+		log_warn("max-brightness requires use-damage = false. Falling back to "
+		         "1.0");
 		opt->max_brightness = 1.0;
 	}
 
@@ -481,6 +483,11 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 
 		opt->blur_radius = -1;
 		config_setting_lookup_int(blur_cfg, "size", &opt->blur_radius);
+		if (opt->blur_method == BLUR_METHOD_DUAL_KAWASE && opt->blur_radius > 500) {
+			log_warn("Blur radius >500 not supported by dual_kawase method, "
+			         "capping to 500.");
+			opt->blur_radius = 500;
+		}
 
 		if (config_setting_lookup_string(blur_cfg, "kernel", &sval)) {
 			opt->blur_kerns = parse_blur_kern_lst(sval, conv_kern_hasneg,
@@ -495,6 +502,11 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 
 		opt->blur_strength = -1;
 		config_setting_lookup_int(blur_cfg, "strength", &opt->blur_strength);
+		if (opt->blur_method == BLUR_METHOD_DUAL_KAWASE && opt->blur_strength > 20) {
+			log_warn("Blur strength >20 not supported by dual_kawase method, "
+			         "capping to 20.");
+			opt->blur_strength = 20;
+		}
 	}
 
 	// Wintype settings
