@@ -88,6 +88,8 @@ enum blur_method parse_blur_method(const char *src) {
 		return BLUR_METHOD_BOX;
 	} else if (strcmp(src, "gaussian") == 0) {
 		return BLUR_METHOD_GAUSSIAN;
+	} else if (strcmp(src, "dual_kawase") == 0) {
+		return BLUR_METHOD_DUAL_KAWASE;
 	} else if (strcmp(src, "none") == 0) {
 		return BLUR_METHOD_NONE;
 	}

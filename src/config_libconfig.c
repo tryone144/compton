@@ -492,6 +492,9 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 
 		opt->blur_deviation = 0.84089642;
 		config_setting_lookup_float(blur_cfg, "deviation", &opt->blur_deviation);
+
+		opt->blur_strength = -1;
+		config_setting_lookup_int(blur_cfg, "strength", &opt->blur_strength);
 	}
 
 	// Wintype settings
