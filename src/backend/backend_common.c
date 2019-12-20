@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (c) Yuxuan Shui <yshuiv7@gmail.com>
-#include <string.h>
 #include <math.h>
+#include <string.h>
 #include <xcb/render.h>
 #include <xcb/xcb_image.h>
 #include <xcb/xcb_renderutil.h>
@@ -9,10 +9,10 @@
 #include "backend/backend.h"
 #include "backend/backend_common.h"
 #include "common.h"
-#include "kernel.h"
 #include "config.h"
-#include "utils.h"
+#include "kernel.h"
 #include "log.h"
+#include "utils.h"
 #include "win.h"
 #include "x.h"
 
@@ -283,8 +283,7 @@ default_backend_render_shadow(backend_t *backend_data, int width, int height,
 	return ret;
 }
 
-static struct conv **
-generate_box_blur_kernel(struct box_blur_args *args, int *kernel_count) {
+static struct conv **generate_box_blur_kernel(struct box_blur_args *args, int *kernel_count) {
 	int r = args->size * 2 + 1;
 	assert(r > 0);
 	auto ret = ccalloc(2, struct conv *);
@@ -334,6 +333,20 @@ struct conv **generate_blur_kernel(enum blur_method method, void *args, int *ker
 	default: break;
 	}
 	return NULL;
+}
+
+/// Generate kernel parameters for dual-kawase blur method. Falls back on approximating
+/// standard gauss radius if strength is not supplied
+struct dual_kawase_params *generate_dual_kawase_params(void *args) {
+	struct dual_kawase_blur_args *blur_args = args;
+
+	// TODO: create real parameters from supplied arguments
+	auto params = ccalloc(1, struct dual_kawase_params);
+	params->iterations = 3;
+	params->offset = 3.25f;
+	params->expand = 20;
+
+	return params;
 }
 
 void init_backend_base(struct backend_base *base, session_t *ps) {
