@@ -4,7 +4,7 @@
 
 if [ -z "`dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames | grep compton`" ]; then
   echo "compton DBus interface unavailable"
-  if [ -n "`pgrep compton`" ]; then
+  if [ -n "`pgrep picom`" ]; then
     echo "compton running without dbus interface"
     #killall compton & # Causes all windows to flicker away and come back ugly.
     #compton --dbus & # Causes all windows to flicker away and come back beautiful
@@ -34,7 +34,7 @@ service="com.github.chjj.compton.${dpy}"
 interface="com.github.chjj.compton"
 compton_dbus="dbus-send --print-reply --dest="${service}" / "${interface}"."
 type_win='uint32'
-type_enum='uint16'
+type_enum='uint32'
 
 # === Color Inversion ===
 
@@ -43,7 +43,6 @@ if [ -z "$1" -o "$1" = "selected" ]; then
   window=$(xwininfo -frame | sed -n 's/^xwininfo: Window id: \(0x[[:xdigit:]][[:xdigit:]]*\).*/\1/p') # Select window by mouse
 elif [ "$1" = "focused" ]; then
   # Ensure we are tracking focus
-  ${compton_dbus}opts_set string:track_focus boolean:true &
   window=$(${compton_dbus}find_win string:focused | $SED -n 's/^[[:space:]]*'${type_win}'[[:space:]]*\([[:digit:]]*\).*/\1/p') # Query compton for the active window
 elif echo "$1" | grep -Eiq '^([[:digit:]][[:digit:]]*|0x[[:xdigit:]][[:xdigit:]]*)$'; then
   window="$1" # Accept user-specified window-id if the format is correct

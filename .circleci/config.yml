@@ -1,0 +1,135 @@
+executors:
+  e:
+    docker:
+      - image: yshui/comptonci
+    working_directory: "/tmp/workspace"
+    environment:
+      UBSAN_OPTIONS: "halt_on_error=1"
+
+version: 2.1
+commands:
+  build:
+    parameters:
+      build-config:
+        type: string
+        default: ""
+      cc:
+        type: string
+        default: cc
+    steps:
+      - restore_cache:
+          keys:
+            - source-v1-{{ .Branch }}-{{ .Revision }}
+            - source-v1-{{ .Branch }}-
+            - source-v1-
+      - checkout
+      - save_cache:
+          key: source-v1-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - ".git"
+      - run:
+          name: config
+          command: CC=<< parameters.cc >> meson << parameters.build-config >> -Dunittest=true --werror . build
+      - run:
+          name: build
+          command: ninja -vC build
+
+jobs:
+  basic:
+    executor: e
+    steps:
+      - build:
+          build-config: -Dbuild_docs=true -Db_coverage=true
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+  test:
+    executor: e
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: unit test
+          command: ninja -vC build test
+      - run:
+          name: test config file parsing
+          command: xvfb-run -s "-screen 0 640x480x24" build/src/picom --config picom.sample.conf --no-vsync --diagnostics
+      - run:
+          name: run testsuite
+          command: tests/run_tests.sh build/src/picom
+      - run:
+          name: generate coverage reports
+          command: cd build; find -name '*.gcno' -exec gcov -pb {} +
+      - run:
+          name: download codecov scripts
+          command: curl -s https://codecov.io/bash > codecov.sh
+      - run:
+          name: upload coverage reports
+          command: bash ./codecov.sh -X gcov
+
+  minimal:
+    executor: e
+    steps:
+      - build:
+          build-config: -Dopengl=false -Ddbus=false -Dregex=false -Dconfig_file=false
+  release:
+    executor: e
+    steps:
+      - build:
+          build-config: --buildtype=release
+  release-clang:
+    executor: e
+    steps:
+      - build:
+          cc: clang
+          build-config: --buildtype=release
+  nogl:
+    executor: e
+    steps:
+      - build:
+          build-config: -Dopengl=false
+  noregex:
+    executor: e
+    steps:
+      - build:
+          build-config: -Dregex=false
+  clang_basic:
+    executor: e
+    steps:
+      - build:
+          cc: clang
+  clang_minimal:
+    executor: e
+    steps:
+      - build:
+          cc: clang
+          build-config: -Dopengl=false -Ddbus=false -Dregex=false -Dconfig_file=false
+  clang_nogl:
+    executor: e
+    steps:
+      - build:
+          cc: clang
+          build-config: -Dopengl=false
+  clang_noregex:
+    executor: e
+    steps:
+      - build:
+          cc: clang
+          build-config: -Dregex=false
+
+workflows:
+  all_builds:
+    jobs:
+      - basic
+      - clang_basic
+      - minimal
+      - clang_minimal
+      - nogl
+      - clang_nogl
+      - release
+      - release-clang
+      - test:
+          requires:
+            - basic
+# vim: set sw=2 ts=8 et:

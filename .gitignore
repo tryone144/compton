@@ -2,8 +2,6 @@
 .deps
 aclocal.m4
 autom4te.cache
-config.h
-config.h.in
 config.log
 config.status
 configure
@@ -13,7 +11,13 @@ missing
 stamp-h1
 compton
 *.o
+*.d
 build/
+compile_commands.json
+build.ninja
+
+# ccls
+.ccls-cache
 
 # CMake files
 compton-*.deb
@@ -34,8 +38,8 @@ install_manifest.txt
 *~
 
 # Misc files
-/core
-/*.core
+core.*
+.gdb_history
 oprofile_data/
 compton.plist
 callgrind.out.*
@@ -47,3 +51,4 @@ doxygen/
 .ycm_extra_conf.pyc
 /src/backtrace-symbols.[ch]
 /compton*.trace
+*.orig
