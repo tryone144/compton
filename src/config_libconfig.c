@@ -398,6 +398,8 @@ char *parse_config_libconfig(options_t *opt, const char *config_file, bool *shad
 			goto err;
 		}
 	}
+    // --blur-strength
+    config_lookup_int(&cfg, "blur-strength", &opt->blur_strength);
 	// --resize-damage
 	config_lookup_int(&cfg, "resize-damage", &opt->resize_damage);
 	// --glx-no-stencil

@@ -251,7 +251,7 @@ static void usage(const char *argv0, int ret) {
 	    "--opacity-rule opacity:condition\n"
 	    "  Specify a list of opacity rules, in the format \"PERCENT:PATTERN\",\n"
 	    "  like \'50:name *= \"Firefox\"'. picom-trans is recommended over\n"
-	    "  this. Note we do not distinguish 100% and unset, and we don't make\n"
+	    "  this. Note we do not distinguish 100%% and unset, and we don't make\n"
 	    "  any guarantee about possible conflicts with other programs that set\n"
 	    "  _NET_WM_WINDOW_OPACITY on frame or client windows.\n"
 	    "\n"
@@ -274,7 +274,7 @@ static void usage(const char *argv0, int ret) {
 	    "\n\n"
 	    "--glx-no-stencil\n"
 	    "  GLX backend: Avoid using stencil buffer. Might cause issues\n"
-	    "  when rendering transparent content. My tests show a 15% performance\n"
+	    "  when rendering transparent content. My tests show a 15%% performance\n"
 	    "  boost.\n"
 	    "\n"
 	    "--glx-no-rebind-pixmap\n"
@@ -427,6 +427,8 @@ static const struct option longopts[] = {
     {"diagnostics", no_argument, NULL, 801},
     {"debug-mode", no_argument, NULL, 802},
     {"no-ewmh-fullscreen", no_argument, NULL, 803},
+    {"blur-method", required_argument, NULL, 804},
+    {"blur-strength", required_argument, NULL, 805},
     // Must terminate with a NULL entry
     {NULL, 0, NULL, 0},
 };
@@ -814,6 +816,11 @@ bool get_cfg(options_t *opt, int argc, char *const *argv, bool shadow_enable,
 		case 801: opt->print_diagnostics = true; break;
 		P_CASEBOOL(802, debug_mode);
 		P_CASEBOOL(803, no_ewmh_fullscreen);
+		case 804:
+			opt->blur_method = parse_blur_method(optarg);
+			break;
+		P_CASEINT(805, blur_strength);
+
 		default: usage(argv[0], 1); break;
 #undef P_CASEBOOL
 		}
