@@ -820,7 +820,6 @@ bool get_cfg(options_t *opt, int argc, char *const *argv, bool shadow_enable,
 			opt->blur_method = parse_blur_method(optarg);
 			break;
 		P_CASEINT(805, blur_strength);
-
 		default: usage(argv[0], 1); break;
 #undef P_CASEBOOL
 		}
