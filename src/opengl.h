@@ -136,6 +136,9 @@ static int
 glx_cmp_fbconfig(session_t *ps,
     const glx_fbconfig_t *pfbc_a, const glx_fbconfig_t *pfbc_b);
 
+static inline GLuint
+glx_gen_texture(session_t *ps, GLenum tex_tgt, int width, int height);
+
 static void
 glx_render_color(session_t *ps, int dx, int dy, int width, int height, int z,
     XserverRegion reg_tgt, const reg_data_t *pcache_reg);

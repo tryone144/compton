@@ -491,13 +491,13 @@ typedef struct {
 
 typedef struct {
   /// Framebuffer used for blurring.
-  GLuint fbo;
+  GLuint fbos[MAX_BLUR_PASS];
   /// Textures used for blurring.
   GLuint textures[MAX_BLUR_PASS];
   /// Width of the textures.
-  int width;
+  int width[MAX_BLUR_PASS];
   /// Height of the textures.
-  int height;
+  int height[MAX_BLUR_PASS];
 } glx_blur_cache_t;
 
 typedef struct {
@@ -555,6 +555,7 @@ struct _win;
 typedef struct {
   int iterations;
   float offset;
+  int expand;
 } blur_strength_t;
 
 typedef struct _c2_lptr c2_lptr_t;
@@ -818,7 +819,10 @@ typedef struct {
   /// FBConfig-s for GLX pixmap of different depths.
   glx_fbconfig_t *fbconfigs[OPENGL_MAX_DEPTH + 1];
 #ifdef CONFIG_VSYNC_OPENGL_GLSL
+  /// Blur shader for every pass.
   glx_blur_pass_t blur_passes[MAX_BLUR_PASS];
+  /// Cached blur textures and fbos.
+  glx_blur_cache_t blur_cache;
 #endif
 } glx_session_t;
 
@@ -1250,11 +1254,6 @@ typedef struct _win {
   bool blur_background;
   /// Background state on last paint.
   bool blur_background_last;
-
-#ifdef CONFIG_VSYNC_OPENGL_GLSL
-  /// Textures and FBO background blur use.
-  glx_blur_cache_t glx_blur_cache;
-#endif
 } win;
 
 /// Temporary structure used for communication between
@@ -1713,26 +1712,26 @@ parse_blur_method(session_t *ps, const char *str) {
 static inline bool
 parse_blur_strength(session_t *ps, const int level) {
   static const blur_strength_t values[20] = {
-    { .iterations = 1, .offset = 1.5 },     // 1
-    { .iterations = 1, .offset = 2.0 },     // 2
-    { .iterations = 2, .offset = 2.5 },     // 3
-    { .iterations = 2, .offset = 3.0 },     // 4
-    { .iterations = 3, .offset = 2.75 },    // 5
-    { .iterations = 3, .offset = 3.5 },     // 6
-    { .iterations = 3, .offset = 4.25 },    // 7
-    { .iterations = 3, .offset = 5.0 },     // 8
-    { .iterations = 4, .offset = 3.71429 }, // 9
-    { .iterations = 4, .offset = 4.42857 }, // 10
-    { .iterations = 4, .offset = 5.14286 }, // 11
-    { .iterations = 4, .offset = 5.85714 }, // 12
-    { .iterations = 4, .offset = 6.57143 }, // 13
-    { .iterations = 4, .offset = 7.28571 }, // 14
-    { .iterations = 4, .offset = 8.0 },     // 15
-    { .iterations = 5, .offset = 6.0 },     // 16
-    { .iterations = 5, .offset = 7.0 },     // 17
-    { .iterations = 5, .offset = 8.0 },     // 18
-    { .iterations = 5, .offset = 9.0 },     // 19
-    { .iterations = 5, .offset = 10.0 },    // 20
+    { .iterations = 1, .offset = 1.5,     .expand = 10 },  // 1
+    { .iterations = 1, .offset = 2.0,     .expand = 10 },  // 2
+    { .iterations = 2, .offset = 2.5,     .expand = 20 },  // 3
+    { .iterations = 2, .offset = 3.0,     .expand = 20 },  // 4
+    { .iterations = 3, .offset = 2.75,    .expand = 50 },  // 5
+    { .iterations = 3, .offset = 3.5,     .expand = 50 },  // 6
+    { .iterations = 3, .offset = 4.25,    .expand = 50 },  // 7
+    { .iterations = 3, .offset = 5.0,     .expand = 50 },  // 8
+    { .iterations = 4, .offset = 3.71429, .expand = 150 }, // 9
+    { .iterations = 4, .offset = 4.42857, .expand = 150 }, // 10
+    { .iterations = 4, .offset = 5.14286, .expand = 150 }, // 11
+    { .iterations = 4, .offset = 5.85714, .expand = 150 }, // 12
+    { .iterations = 4, .offset = 6.57143, .expand = 150 }, // 13
+    { .iterations = 4, .offset = 7.28571, .expand = 150 }, // 14
+    { .iterations = 4, .offset = 8.0,     .expand = 150 }, // 15
+    { .iterations = 5, .offset = 6.0,     .expand = 400 }, // 16
+    { .iterations = 5, .offset = 7.0,     .expand = 400 }, // 17
+    { .iterations = 5, .offset = 8.0,     .expand = 400 }, // 18
+    { .iterations = 5, .offset = 9.0,     .expand = 400 }, // 19
+    { .iterations = 5, .offset = 10.0,    .expand = 400 }, // 20
   };
 
   if (level < 1 || level > 20) {
@@ -2274,8 +2273,7 @@ glx_set_clip(session_t *ps, XserverRegion reg, const reg_data_t *pcache_reg);
 bool
 glx_blur_dst(session_t *ps, int dx, int dy, int width, int height, float z,
     GLfloat factor_center,
-    XserverRegion reg_tgt, const reg_data_t *pcache_reg,
-    glx_blur_cache_t *pbc);
+    XserverRegion reg_tgt, const reg_data_t *pcache_reg);
 #endif
 
 bool
@@ -2352,10 +2350,11 @@ free_glx_fbo(session_t *ps, GLuint *pfbo) {
  */
 static inline void
 free_glx_bc_resize(session_t *ps, glx_blur_cache_t *pbc) {
-  for (int i = 0; i < MAX_BLUR_PASS; i++)
+  for (int i = 0; i < MAX_BLUR_PASS; i++) {
     free_texture_r(ps, &pbc->textures[i]);
-  pbc->width = 0;
-  pbc->height = 0;
+    pbc->width[i] = 0;
+    pbc->height[i] = 0;
+  }
 }
 
 /**
@@ -2363,7 +2362,8 @@ free_glx_bc_resize(session_t *ps, glx_blur_cache_t *pbc) {
  */
 static inline void
 free_glx_bc(session_t *ps, glx_blur_cache_t *pbc) {
-  free_glx_fbo(ps, &pbc->fbo);
+  for (int i = 0; i < MAX_BLUR_PASS; i++)
+      free_glx_fbo(ps, &pbc->fbos[i]);
   free_glx_bc_resize(ps, pbc);
 }
 #endif
@@ -2407,9 +2407,6 @@ static inline void
 free_win_res_glx(session_t *ps, win *w) {
   free_paint_glx(ps, &w->paint);
   free_paint_glx(ps, &w->shadow_paint);
-#ifdef CONFIG_VSYNC_OPENGL_GLSL
-  free_glx_bc(ps, &w->glx_blur_cache);
-#endif
 }
 
 /**
