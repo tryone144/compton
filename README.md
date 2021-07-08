@@ -8,6 +8,18 @@ This branch includes a new blur method: The multi-pass **dual_kawase blur**!
 Use it with the `--blur-method dual_kawase` and `--blur-strength LEVEL` options.
 Only works with the `glx` backend!
 
+## Deprecation Notice
+
+This fork contains more of a proof-of-concept than a polished implementation of the *dual-filter kawase blur*.
+As you may have noticed, the development on compton seems to have halted.
+[**picom**](https://github.com/yshui/picom) is a compton-fork that is actively maintained and has superseeded compton in most distributions already.
+As of Aug, 31st 2020, picom comes with a better optimized and polished [implementation](https://github.com/yshui/picom/pull/382) of the *dual-filter kawase blur*, that will be part of the next regular release (v9).
+
+This fork will most likely not receive any future improvements or fixes.
+**I strongly suggest you give picom a try, unless you absolutely have to use compton.**
+
+---
+
 I was frustrated by the low amount of standalone lightweight compositors.
 Compton was forked from Dana Jansens' fork of xcompmgr and refactored.  I fixed
 whatever bug I found, and added features I wanted. Things seem stable, but don't
