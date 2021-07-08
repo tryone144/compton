@@ -616,12 +616,10 @@ glx_init_dualkawase_blur(session_t *ps) {
         return false;
       }
 
-      char *pc = shader_str;
-      sprintf(pc, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
-      pc += strlen(pc);
+      sprintf(shader_str, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
       assert(strlen(shader_str) < len);
 
-      sprintf(pc, FRAG_SHADER_KAWASE_DOWN);
+      strcat(shader_str, FRAG_SHADER_KAWASE_DOWN);
       assert(strlen(shader_str) < len);
 #ifdef DEBUG_GLX
       printf_dbgf("(): Generated kawase downsample shader:\n%s\n", shader_str);
@@ -664,12 +662,10 @@ glx_init_dualkawase_blur(session_t *ps) {
         return false;
       }
 
-      char *pc = shader_str;
-      sprintf(pc, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
-      pc += strlen(pc);
+      sprintf(shader_str, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
       assert(strlen(shader_str) < len);
 
-      sprintf(pc, FRAG_SHADER_KAWASE_UP);
+      strcat(shader_str, FRAG_SHADER_KAWASE_UP);
       assert(strlen(shader_str) < len);
 #ifdef DEBUG_GLX
       printf_dbgf("(): Generated kawase upsample shader:\n%s\n", shader_str);
