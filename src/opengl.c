@@ -719,12 +719,10 @@ glx_init_dualkawase_blur(session_t *ps) {
         return false;
       }
 
-      char *pc = shader_str;
-      sprintf(pc, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
-      pc += strlen(pc);
+      sprintf(shader_str, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
       assert(strlen(shader_str) < len);
 
-      sprintf(pc, FRAG_SHADER_KAWASE_DOWN);
+      strcat(shader_str, FRAG_SHADER_KAWASE_DOWN);
       assert(strlen(shader_str) < len);
       down_pass->frag_shader = glx_create_shader(GL_FRAGMENT_SHADER, shader_str);
       free(shader_str);
@@ -764,12 +762,10 @@ glx_init_dualkawase_blur(session_t *ps) {
         return false;
       }
 
-      char *pc = shader_str;
-      sprintf(pc, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
-      pc += strlen(pc);
+      sprintf(shader_str, FRAG_SHADER_PREFIX, extension, sampler_type, texture_func);
       assert(strlen(shader_str) < len);
 
-      sprintf(pc, FRAG_SHADER_KAWASE_UP);
+      strcat(shader_str, FRAG_SHADER_KAWASE_UP);
       assert(strlen(shader_str) < len);
       up_pass->frag_shader = glx_create_shader(GL_FRAGMENT_SHADER, shader_str);
       free(shader_str);
